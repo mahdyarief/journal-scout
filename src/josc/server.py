@@ -824,6 +824,13 @@ async def _run_http(host: str, port: int, token: Optional[str]) -> None:
         if path == "/healthz":
             await _send_json(send, 200, b'{"status":"ok","server":"journal-scout"}')
             return
+        if path in ("/", ""):
+            await _send_json(
+                send,
+                200,
+                b'{"server":"journal-scout","mcp":"/mcp","health":"/healthz"}',
+            )
+            return
         if path not in ("/mcp", "/mcp/"):
             await _send_json(send, 404, b'{"error":"not found"}')
             return
