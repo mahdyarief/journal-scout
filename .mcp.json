@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "journal-scout": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "journal-scout-mcp==2.5.0", "journal-scout"]
+    }
+  }
+}
