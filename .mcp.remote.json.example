@@ -1,8 +1,6 @@
 {
-  "mcpServers": {
-    "journal-scout": {
-      "type": "http",
-      "url": "https://journal.nimb.us.ci/mcp"
-    }
+  "journal-scout": {
+    "type": "http",
+    "url": "https://journal.nimb.us.ci/mcp"
   }
 }

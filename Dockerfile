@@ -1,3 +1,10 @@
+FROM node:22-alpine AS web-build
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,7 +17,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir ".[server]"
+COPY --from=web-build /web/dist ./web/dist
+RUN pip install --no-cache-dir ".[server,web]"
 
 RUN useradd --create-home --uid 10001 josc
 USER josc

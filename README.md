@@ -80,9 +80,19 @@ on OpenAlex, Crossref, and Unpaywall.
 ## Remote MCP server
 
 The MCP server can run as a standalone Streamable HTTP service for remote MCP
-clients. The Docker image listens on port `8080`; configure `JOSC_MCP_TOKEN` to
-enforce bearer-token authentication. `/healthz` is unauthenticated for container
-health checks. The existing stdio transport remains the default for local use.
+clients. One image serves both surfaces:
+
+| Path | Purpose |
+|---|---|
+| `/` and all SPA routes | The `josc-web` browser UI |
+| `/api/*` | REST API used by the browser UI |
+| `/mcp` | Streamable HTTP MCP endpoint |
+| `/healthz` | Unauthenticated container health check |
+
+The Docker image builds the frontend in a `node:22-alpine` stage and listens on
+port `8080`. Configure `JOSC_MCP_TOKEN` to enforce bearer-token authentication
+on `/mcp`; the UI and `/healthz` stay public. The stdio transport remains the
+default when running from source.
 
 ```bash
 docker build -t journal-scout .
@@ -91,11 +101,10 @@ docker run --rm -p 8080:8080 \
   journal-scout
 ```
 
-Configure the remote MCP URL at `https://<your-domain>/mcp` and send
+Configure remote MCP clients with URL `https://<your-domain>/mcp` and send
 `Authorization: Bearer <token>` when authentication is enabled. The plugin's
-`.mcp.json` still uses local stdio by default. To connect to a remote server,
-switch the entry to `type: "http"` with `url` and `headers.Authorization`, or
-see `.mcp.remote.json.example` for a client config example.
+`.mcp.json` points at the hosted server via `type: "http"`; use
+`.mcp.remote.json.example` as a client config template.
 
 Environment variables:
 

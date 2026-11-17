@@ -786,8 +786,11 @@ async def _run_http(host: str, port: int, token: Optional[str]) -> None:
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
     import uvicorn
 
+    from .api import app as web_app
+
     server, fetcher, store = await _build_server()
     manager = StreamableHTTPSessionManager(app=server, stateless=True)
+    web_lifespan = web_app.router.lifespan_context
 
     async def _send_json(send, status: int, payload: bytes) -> None:
         await send(
@@ -811,6 +814,7 @@ async def _run_http(host: str, port: int, token: Optional[str]) -> None:
                     if message["type"] == "lifespan.startup":
                         try:
                             await stack.enter_async_context(manager.run())
+                            await stack.enter_async_context(web_lifespan(web_app))
                             await send({"type": "lifespan.startup.complete"})
                         except Exception as exc:  # noqa: BLE001
                             await send({"type": "lifespan.startup.failed", "message": str(exc)})
@@ -824,23 +828,16 @@ async def _run_http(host: str, port: int, token: Optional[str]) -> None:
         if path == "/healthz":
             await _send_json(send, 200, b'{"status":"ok","server":"journal-scout"}')
             return
-        if path in ("/", ""):
-            await _send_json(
-                send,
-                200,
-                b'{"server":"journal-scout","mcp":"/mcp","health":"/healthz"}',
-            )
+        if path in ("/mcp", "/mcp/"):
+            if token:
+                headers = dict(scope.get("headers") or [])
+                supplied = headers.get(b"authorization", b"")
+                if not hmac.compare_digest(supplied, f"Bearer {token}".encode()):
+                    await _send_json(send, 401, b'{"error":"unauthorized"}')
+                    return
+            await manager.handle_request(scope, receive, send)
             return
-        if path not in ("/mcp", "/mcp/"):
-            await _send_json(send, 404, b'{"error":"not found"}')
-            return
-        if token:
-            headers = dict(scope.get("headers") or [])
-            supplied = headers.get(b"authorization", b"")
-            if not hmac.compare_digest(supplied, f"Bearer {token}".encode()):
-                await _send_json(send, 401, b'{"error":"unauthorized"}')
-                return
-        await manager.handle_request(scope, receive, send)
+        await web_app(scope, receive, send)
 
     config_obj = uvicorn.Config(app, host=host, port=port, log_level="info")
     try:
