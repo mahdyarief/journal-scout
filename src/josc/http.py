@@ -11,7 +11,6 @@ from .models import ProviderError
 MAX_BACKOFF_SECONDS = 60
 MIN_INTERVALS: Dict[str, float] = {
     "arxiv": 3.0,
-    "semanticscholar": 1.0,
     # OpenCitations allows 180 requests/minute per IP.
     "opencitations": 0.34,
 }

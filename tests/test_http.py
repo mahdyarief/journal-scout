@@ -22,6 +22,23 @@ async def test_get_json_returns_payload():
         await f.close()
 
 
+async def test_get_json_html_202_reports_bot_challenge():
+    def handler(request):
+        return httpx.Response(
+            202,
+            headers={"content-type": "text/html"},
+            text="<!doctype html><html><title>Making sure you&#39;re not a bot!</title>",
+        )
+
+    f = _fetcher(handler)
+    try:
+        with pytest.raises(ProviderError) as exc:
+            await f.get_json("https://example.test/search", provider="example")
+        assert "bot challenge" in str(exc.value)
+    finally:
+        await f.close()
+
+
 async def test_get_json_non_json_body_raises_provider_error():
     def handler(request):
         return httpx.Response(
@@ -49,7 +66,7 @@ async def test_retries_then_succeeds():
 
     f = _fetcher(handler)
     try:
-        assert await f.get_json("https://example.test/x", provider="dblp") == {"ok": True}
+        assert await f.get_json("https://example.test/x", provider="crossref") == {"ok": True}
         assert calls["n"] == 2
     finally:
         await f.close()
@@ -113,23 +130,6 @@ async def test_retry_after_header_is_honoured(monkeypatch):
         await f.close()
 
 
-async def test_get_json_html_body_reports_bot_challenge():
-    def handler(request):
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/html"},
-            text="<!doctype html><html><title>Making sure you're not a bot!</title>",
-        )
-
-    f = _fetcher(handler)
-    try:
-        with pytest.raises(ProviderError) as exc:
-            await f.get_json("https://dblp.org/search/publ/api", provider="dblp")
-        assert "HTML" in str(exc.value)
-    finally:
-        await f.close()
-
-
 async def test_permanent_500_raises_provider_error():
     def handler(request):
         return httpx.Response(500, text="boom")
@@ -137,8 +137,8 @@ async def test_permanent_500_raises_provider_error():
     f = _fetcher(handler)
     try:
         with pytest.raises(ProviderError) as exc:
-            await f.get_json("https://example.test/x", provider="dblp")
-        assert exc.value.provider == "dblp"
+            await f.get_json("https://example.test/x", provider="example")
+        assert exc.value.provider == "example"
     finally:
         await f.close()
 

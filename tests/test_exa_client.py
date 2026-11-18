@@ -3,12 +3,7 @@ import json
 import httpx
 
 from josc.exa import parse_mcp_body, parse_payload
-from josc.exa_client import (
-    call_exa_mcp,
-    load_exa_keys,
-    reset_key_index,
-    save_exa_keys,
-)
+from josc.exa_client import call_exa_mcp, load_exa_keys, reset_key_index
 
 
 def _sse(payload: dict) -> str:
@@ -34,23 +29,37 @@ def test_parse_payload_decodes_json_text():
     assert parse_payload(_result('[{"title": "A"}]')) == [{"title": "A"}]
 
 
-def test_load_and_save_keys_roundtrip(tmp_path):
-    config = tmp_path / "config.json"
-    config.write_text(json.dumps({"polite_email": "a@b.c"}), encoding="utf-8")
-
-    save_exa_keys([" one ", "two", "one"], config_path=config)
-    assert load_exa_keys(config_path=config) == ["one", "two"]
-
-    saved = json.loads(config.read_text(encoding="utf-8"))
-    assert saved["polite_email"] == "a@b.c"
+def test_load_keys_splits_comma_list(monkeypatch):
+    monkeypatch.setenv("EXA_API_KEYS", " one , two,three ")
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    assert load_exa_keys() == ["one", "two", "three"]
 
 
-async def test_call_rotates_on_401(monkeypatch, tmp_path):
-    config = tmp_path / "config.json"
-    save_exa_keys(["bad-key", "good-key"], config_path=config)
+def test_load_keys_accepts_semicolons_and_json(monkeypatch):
+    monkeypatch.setenv("EXA_API_KEYS", "one;two")
+    assert load_exa_keys() == ["one", "two"]
+    monkeypatch.setenv("EXA_API_KEYS", '["a", "b"]')
+    assert load_exa_keys() == ["a", "b"]
+
+
+def test_load_keys_dedupes_and_falls_back_to_single(monkeypatch):
     monkeypatch.setenv("EXA_API_KEYS", "")
-    monkeypatch.setenv("EXA_API_KEY", "")
-    monkeypatch.setattr("josc.exa_client.load_exa_keys", lambda *a, **k: ["bad-key", "good-key"])
+    monkeypatch.setenv("EXA_API_KEY", "solo")
+    assert load_exa_keys() == ["solo"]
+    monkeypatch.setenv("EXA_API_KEYS", "k1,k1,k2")
+    assert load_exa_keys() == ["k1", "k2"]
+
+
+def test_load_keys_empty_when_unset(monkeypatch):
+    monkeypatch.delenv("EXA_API_KEYS", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    assert load_exa_keys() == []
+
+
+async def test_call_rotates_on_401(monkeypatch):
+    monkeypatch.setattr(
+        "josc.exa_client.load_exa_keys", lambda: ["bad-key", "good-key"]
+    )
     reset_key_index()
 
     seen: list[str] = []
@@ -74,7 +83,7 @@ async def test_call_rotates_on_401(monkeypatch, tmp_path):
 
 
 async def test_call_exhausts_keys_and_raises(monkeypatch):
-    monkeypatch.setattr("josc.exa_client.load_exa_keys", lambda *a, **k: ["only-key"])
+    monkeypatch.setattr("josc.exa_client.load_exa_keys", lambda: ["only-key"])
     reset_key_index()
 
     client = httpx.AsyncClient(

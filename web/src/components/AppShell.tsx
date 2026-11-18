@@ -13,7 +13,7 @@ import {
   MetricsIcon,
   PanelToggleIcon,
   SearchIcon,
-  SettingsIcon,
+  DocsIcon,
 } from "./icons";
 
 const NAV = [
@@ -22,7 +22,7 @@ const NAV = [
   { to: "/graph", label: "Citation graph", Icon: GraphIcon },
   { to: "/metrics", label: "Metrics", Icon: MetricsIcon },
   { to: "/history", label: "History", Icon: HistoryIcon },
-  { to: "/settings", label: "Settings", Icon: SettingsIcon },
+  { to: "/docs", label: "Docs", Icon: DocsIcon },
 ] as const;
 
 const COLLAPSE_KEY = "josc.sidebar.collapsed";
@@ -201,8 +201,8 @@ export function AppShell() {
 
         <footer className="border-t border-slate-800">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-4 text-[11px] text-slate-400 sm:px-6 lg:px-8">
-            Powered by journal-scout-mcp. Scopus, OpenAlex, Semantic Scholar, Crossref,
-            arXiv, PubMed, DBLP.
+            Powered by journal-scout. Scopus, OpenAlex, Crossref, arXiv,
+            PubMed, Consensus.
           </div>
         </footer>
       </div>

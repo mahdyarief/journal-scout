@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 
 from ..exa_client import call_exa_mcp
-from ..models import Paper, ProviderError
+from ..models import Paper
 from ..utils import parse_year
 from .base import ProviderBase
 
@@ -65,14 +65,6 @@ class ExaProvider(ProviderBase):
         **_: object,
     ) -> List[Paper]:
         del year_from, year_to, tech_only, offset
-        from ..exa_client import load_exa_keys
-
-        if not load_exa_keys():
-            raise ProviderError(
-                self.name,
-                "No Exa API keys configured. Add keys in Settings or set EXA_API_KEYS.",
-            )
-
         payload = await call_exa_mcp(
             "web_search_exa",
             {

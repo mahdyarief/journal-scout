@@ -1,9 +1,9 @@
-"""Exa MCP client with round-robin API-key rotation.
+"""Exa MCP client, with optional round-robin API-key rotation.
 
-Mirrors the behaviour of the ``web-access`` plugin: keys are read from
-``config.json`` (or ``EXA_API_KEYS``), sent as ``Authorization: Bearer`` and
-rotated when Exa answers 401/429.  Request bodies are JSON-RPC ``tools/call``
-payloads and both plain-JSON and SSE responses are supported.
+The public MCP endpoint works without a key. ``EXA_API_KEYS`` (a comma- or
+semicolon-separated list, or a JSON array) is optional; when present, keys are
+sent as ``Authorization: Bearer`` and rotated on 401/429. Request bodies are
+JSON-RPC ``tools/call`` payloads and both plain-JSON and SSE responses work.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .config import CONFIG_FILE
 from .exa import parse_mcp_body, parse_payload
 from .models import ProviderError
 
@@ -25,68 +24,31 @@ _LOCK = asyncio.Lock()
 _INDEX = 0
 
 
-def _env_keys() -> List[str]:
-    raw = os.getenv("EXA_API_KEYS", "")
-    if raw:
-        parts = raw.replace(";", ",").split(",")
-    else:
-        single = os.getenv("EXA_API_KEY", "")
-        parts = [single] if single else []
-    return [k.strip() for k in parts if isinstance(k, str) and k.strip()]
-
-
-def load_exa_keys(config_path: Optional[Any] = None) -> List[str]:
-    """Load Exa keys from the environment or ``config.json``.
-
-    Environment keys take precedence so a deployment can override the UI
-    settings without editing files.  Both ``["k1", "k2"]`` and
-    ``{"keys": ["k1", "k2"]}`` shapes are accepted.
-    """
-    env_keys = _env_keys()
-    if env_keys:
-        return env_keys
-
-    path = config_path or CONFIG_FILE
-    data: Any = {}
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            data = {}
-    raw: Any = data.get("exa_api_keys") if isinstance(data, dict) else None
-    if isinstance(raw, dict):
-        raw = raw.get("keys")
-    if isinstance(raw, str):
-        raw = [raw]
-    if not isinstance(raw, list):
+def _parse_keys(raw: str) -> List[str]:
+    text = raw.strip()
+    if not text:
         return []
-    return [k.strip() for k in raw if isinstance(k, str) and k.strip()]
-
-
-def save_exa_keys(keys: List[str], config_path: Optional[Any] = None) -> None:
-    """Persist Exa keys to ``config.json`` while preserving other settings."""
-    path = config_path or CONFIG_FILE
-    data: Dict[str, Any] = {}
-    if path.exists():
+    if text.startswith("["):
         try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                data = loaded
-        except (json.JSONDecodeError, OSError):
-            pass
-    cleaned: List[str] = []
-    seen: set[str] = set()
-    for key in keys:
-        if not isinstance(key, str):
-            continue
-        key = key.strip()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        cleaned.append(key)
-    data["exa_api_keys"] = cleaned
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    reset_key_index()
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            loaded = None
+        if isinstance(loaded, list):
+            return [k.strip() for k in loaded if isinstance(k, str) and k.strip()]
+    parts = text.replace(";", ",").split(",")
+    return [k.strip() for k in parts if k.strip()]
+
+
+def load_exa_keys() -> List[str]:
+    """Load Exa keys from ``EXA_API_KEYS``, falling back to ``EXA_API_KEY``.
+
+    Accepts a comma/semicolon-separated list or a JSON array, and de-duplicates
+    keys so a repeated entry is not rotated onto twice.
+    """
+    keys = _parse_keys(os.getenv("EXA_API_KEYS", ""))
+    if not keys:
+        keys = _parse_keys(os.getenv("EXA_API_KEY", ""))
+    return list(dict.fromkeys(keys))
 
 
 async def _next_key(keys: List[str]) -> Optional[str]:
@@ -118,6 +80,8 @@ async def call_exa_mcp(
     reports an error.
     """
     keys = load_exa_keys()
+    # With no key configured the public endpoint still serves the request, so
+    # there is exactly one attempt rather than an all-keys-exhausted failure.
     attempts = max(1, len(keys))
     owns_client = client is None
     client = client or httpx.AsyncClient(timeout=timeout)

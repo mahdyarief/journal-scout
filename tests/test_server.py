@@ -25,7 +25,7 @@ class AuthorProvider(ProviderBase):
 
 
 def test_tool_names_count():
-    assert len(TOOL_NAMES) == 42
+    assert len(TOOL_NAMES) == 40
     assert "search_exa" in TOOL_NAMES
     assert "slr_import" in TOOL_NAMES
     assert "slr_screen" in TOOL_NAMES

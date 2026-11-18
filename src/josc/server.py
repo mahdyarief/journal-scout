@@ -293,7 +293,7 @@ def _tool_list() -> List[types.Tool]:
         ),
         types.Tool(
             name="search_author",
-            description="Find one author's papers across every author-search-capable source (Scopus/Crossref/OpenAlex/arXiv/Semantic Scholar), merged and deduped.",
+            description="Find one author's papers across every author-search-capable source (Scopus/Crossref/OpenAlex/arXiv), merged and deduped.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -351,7 +351,7 @@ def _tool_list() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_citations",
-            description="Collect the cross-source citation graph (Scopus + OpenAlex + Semantic Scholar) for one paper. Pass sources to disambiguate a bare id that only one provider understands.",
+            description="Collect the cross-source citation graph (Scopus + OpenAlex + OpenCitations) for one paper. Pass sources to disambiguate a bare id that only one provider understands.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -364,7 +364,7 @@ def _tool_list() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_references",
-            description="Collect the reference list of one paper from every source that exposes references (Scopus/OpenAlex/Semantic Scholar/Crossref), merged and deduped. Pass sources to disambiguate a bare id.",
+            description="Collect the reference list of one paper from every source that exposes references (Scopus/OpenAlex/Crossref/OpenCitations), merged and deduped. Pass sources to disambiguate a bare id.",
             inputSchema={
                 "type": "object",
                 "properties": {

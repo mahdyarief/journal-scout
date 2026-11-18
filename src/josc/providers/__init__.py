@@ -13,10 +13,8 @@ def _provider_classes() -> List[type]:
         from .scopus import ScopusProvider
         from .arxiv import ArxivProvider
         from .openalex import OpenAlexProvider
-        from .semanticscholar import SemanticScholarProvider
         from .crossref import CrossrefProvider
         from .pubmed import PubMedProvider
-        from .dblp import DblpProvider
         from .unpaywall import UnpaywallProvider
         from .opencitations import OpenCitationsProvider
         from .garuda import GarudaProvider
@@ -27,10 +25,8 @@ def _provider_classes() -> List[type]:
             ScopusProvider,
             ArxivProvider,
             OpenAlexProvider,
-            SemanticScholarProvider,
             CrossrefProvider,
             PubMedProvider,
-            DblpProvider,
             UnpaywallProvider,
             OpenCitationsProvider,
             GarudaProvider,
