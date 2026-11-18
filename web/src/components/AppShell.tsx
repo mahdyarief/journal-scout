@@ -13,6 +13,7 @@ import {
   MetricsIcon,
   PanelToggleIcon,
   SearchIcon,
+  SettingsIcon,
 } from "./icons";
 
 const NAV = [
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/graph", label: "Citation graph", Icon: GraphIcon },
   { to: "/metrics", label: "Metrics", Icon: MetricsIcon },
   { to: "/history", label: "History", Icon: HistoryIcon },
+  { to: "/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;
 
 const COLLAPSE_KEY = "josc.sidebar.collapsed";

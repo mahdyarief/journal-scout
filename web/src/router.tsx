@@ -9,6 +9,7 @@ import { HistoryPage } from "./routes/history";
 import { LandscapePage } from "./routes/landscape";
 import { MetricsPage } from "./routes/metrics";
 import { SearchPage } from "./routes/search";
+import { SettingsPage } from "./routes/settings";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -73,12 +74,19 @@ const landscapeRoute = createRoute({
   component: LandscapePage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   searchRoute,
   graphRoute,
   metricsRoute,
   historyRoute,
   landscapeRoute,
+  settingsRoute,
 ]);
 
 export const router = createRouter({ routeTree });

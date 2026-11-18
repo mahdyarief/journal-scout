@@ -21,6 +21,7 @@ const ID_SOURCES = [
   "pubmed",
   "dblp",
   "consensus",
+  "exa",
 ];
 
 function identifierFor(paper: Paper): { identifier: string; source?: string } | null {

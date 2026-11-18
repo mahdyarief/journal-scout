@@ -90,6 +90,29 @@ async def test_persistent_406_raises_provider_error():
         await f.close()
 
 
+async def test_retry_after_header_is_honoured(monkeypatch):
+    calls = {"n": 0}
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("josc.http.asyncio.sleep", fake_sleep)
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, headers={"Retry-After": "7"})
+        return httpx.Response(200, json={"ok": True})
+
+    f = _fetcher(handler)
+    try:
+        assert await f.get_json("https://example.test/x", provider="unpaywall") == {"ok": True}
+        assert sleeps == [7.0]
+    finally:
+        await f.close()
+
+
 async def test_get_json_html_body_reports_bot_challenge():
     def handler(request):
         return httpx.Response(

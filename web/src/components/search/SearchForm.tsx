@@ -26,6 +26,7 @@ const PROVIDERS = [
   "dblp",
   "garuda",
   "consensus",
+  "exa",
 ];
 
 export function SearchForm({ controller }: { controller: SearchController }) {

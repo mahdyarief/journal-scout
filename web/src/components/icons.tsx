@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Settings,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -43,6 +44,10 @@ export function PanelToggleIcon({
 
 export function ChevronDownIcon({ className }: IconProps) {
   return <ChevronDown className={className} strokeWidth={1.6} aria-hidden="true" />;
+}
+
+export function SettingsIcon({ className }: IconProps) {
+  return <Settings className={className} aria-hidden="true" />;
 }
 
 export function SlidersIcon({ className }: IconProps) {

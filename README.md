@@ -13,7 +13,7 @@ Citation links come from OpenCitations as well: 300M+ DOI-to-DOI links, free,
 no API key, no approval. It is not a searchable source — it only answers
 citation and reference queries for a known DOI or OpenCitations id.
 
-## Tools (25)
+## Tools (42)
 
 | Unified | Per-source | Scopus detail |
 |---|---|---|
@@ -26,12 +26,24 @@ citation and reference queries for a known DOI or OpenCitations id.
 | `build_citation_network` | `search_dblp` | `scival_author_lookup` |
 | `compute_metrics` | `search_garuda` | `scival_institution_lookup` |
 | `export_results` | | `scival_topic_metrics` |
+| `get_paper_abstract` | | |
+| `get_abstracts` | | |
 
 `search_all` accepts a `topic` filter. It runs **after** the merge and keeps
 records whose `topics` contain the text (case-insensitive substring). It is
 deliberately not pushed down to providers: OpenAlex concepts, Crossref
 subjects, and PubMed MeSH share no vocabulary, so a local pass costs zero
 extra requests and gives one consistent semantic.
+
+### Abstract resolution
+
+`get_paper_abstract` resolves the abstract of one paper (by DOI, another
+identifier, or title) across every lookup-capable provider. `get_abstracts`
+fills missing abstracts in a list of paper dicts, such as `search_all`
+results. Both keep the `not_found` status with a null abstract when no source
+has one; nothing is guessed from the title, and an existing abstract is never
+overwritten. Provider errors and timeouts are reported per source instead of
+aborting the batch.
 
 ### Export
 
@@ -76,6 +88,13 @@ Copy `config.json.example` to `config.json`. Only the Elsevier `api_key` is
 required; the other sources work without a key. `semantic_scholar_api_key`
 raises the Semantic Scholar rate limit, and `polite_email` improves rate limits
 on OpenAlex, Crossref, and Unpaywall.
+
+`search_exa` searches the web through Exa's MCP endpoint and becomes available
+when Exa API keys are configured. Add multiple keys in the web UI under
+**Settings** (or set `exa_api_keys` in `config.json` / `EXA_API_KEYS` in the
+environment); keys are used round-robin and rotated on HTTP 401/429. Stored
+keys are only ever shown masked. Environment variables take precedence over
+keys saved in the UI.
 
 ## Remote MCP server
 
@@ -163,6 +182,7 @@ The UI has four routes: `/` (search), `/graph`, `/metrics`, and `/history`
 - **Search** 8 scholarly databases from one MCP server, plus OpenCitations for
   citation links on any DOI.
 - **Merge** duplicates by DOI-first dedup.
+- **Resolve** abstracts for one paper or a whole result list from all available sources.
 - **Report** partial failures (per-source) so callers never get a 500 for one
   blackholed API.
 - **Degrade** gracefully where entitlements are missing (e.g. Scopus `view=FULL`).

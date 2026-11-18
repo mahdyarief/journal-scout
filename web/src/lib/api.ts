@@ -312,6 +312,25 @@ export async function exportPapers(papers: Paper[], format: ExportFormat): Promi
   return text;
 }
 
+export type ExaKeySummary = {
+  masked: string;
+  source: "env" | "config";
+};
+
+export type ExaSettings = {
+  keys: ExaKeySummary[];
+  count: number;
+  env_override: boolean;
+};
+
+export function fetchExaSettings(): Promise<ExaSettings> {
+  return getJson<ExaSettings>("/api/settings/exa", {});
+}
+
+export function saveExaKeys(keys: string[]): Promise<{ count: number; saved: boolean }> {
+  return postJson("/api/settings/exa", { keys });
+}
+
 export function graphmlUrl(identifier: string, limit: number, citingLimit: number): string {
   const search = new URLSearchParams({
     identifier,

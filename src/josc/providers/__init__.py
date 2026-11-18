@@ -21,6 +21,7 @@ def _provider_classes() -> List[type]:
         from .opencitations import OpenCitationsProvider
         from .garuda import GarudaProvider
         from .consensus import ConsensusProvider
+        from .exa import ExaProvider
 
         _CLASSES = [
             ScopusProvider,
@@ -34,6 +35,7 @@ def _provider_classes() -> List[type]:
             OpenCitationsProvider,
             GarudaProvider,
             ConsensusProvider,
+            ExaProvider,
         ]
     return _CLASSES
 

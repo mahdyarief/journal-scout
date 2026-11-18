@@ -9,6 +9,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
 from . import aggregator, config, consensus_key, prompts
+from .abstracts import enrich_abstracts, resolve_abstract
 from .cache import build_cache
 from .corpus import load_corpus
 from .exporters import FORMATTERS, format_papers
@@ -39,6 +40,8 @@ UNIFIED_TOOLS = [
     "identify_paper",
     "check_watches",
     "search_corpus",
+    "get_paper_abstract",
+    "get_abstracts",
 ]
 PER_SOURCE_TOOLS = [f"search_{name}" for name in search_provider_names()]
 SCOPUS_DETAIL_TOOLS = ["get_abstract_details", "get_author_profile", "get_quota_status"]
@@ -315,6 +318,38 @@ def _tool_list() -> List[types.Tool]:
             },
         ),
         types.Tool(
+            name="get_paper_abstract",
+            description="Resolve the abstract of one paper from every source that can answer a DOI/title lookup. Returns status='not_found' with a null abstract when no source has one; nothing is guessed.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "doi": {"type": "string", "description": "DOI of the paper."},
+                    "identifier": {"type": "string", "description": "Any other identifier (arXiv/Scopus/OpenAlex id or URL)."},
+                    "title": {"type": "string", "description": "Title used for a title search when no identifier resolves."},
+                    "sources": {"type": "array", "items": {"type": "string"}},
+                    "timeout": {"type": "number", "default": 10.0},
+                },
+                "required": [],
+            },
+        ),
+        types.Tool(
+            name="get_abstracts",
+            description="Fill missing abstracts for a list of paper dicts (e.g. search_all results). Keeps input order, never overwrites an existing abstract, and reports status per paper plus a summary.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "papers": {
+                        "type": "array",
+                        "description": "Paper dicts with doi/title/ids fields.",
+                        "items": {"type": "object"},
+                    },
+                    "sources": {"type": "array", "items": {"type": "string"}},
+                    "timeout": {"type": "number", "default": 10.0},
+                },
+                "required": ["papers"],
+            },
+        ),
+        types.Tool(
             name="get_citations",
             description="Collect the cross-source citation graph (Scopus + OpenAlex + Semantic Scholar) for one paper. Pass sources to disambiguate a bare id that only one provider understands.",
             inputSchema={
@@ -564,6 +599,24 @@ async def build_json(name: str, arguments: Dict[str, Any], providers, scopus_pro
     if name == "get_paper":
         return await aggregator.get_paper(
             providers, arguments["identifier"], sources=arguments.get("sources")
+        )
+    if name == "get_paper_abstract":
+        requested = arguments.get("sources")
+        selected = [p for p in providers if not requested or p.name in requested]
+        return await resolve_abstract(
+            selected,
+            doi=arguments.get("doi"),
+            title=arguments.get("title"),
+            paper={"identifier": arguments.get("identifier")},
+            timeout=arguments.get("timeout", 10.0),
+        )
+    if name == "get_abstracts":
+        requested = arguments.get("sources")
+        selected = [p for p in providers if not requested or p.name in requested]
+        return await enrich_abstracts(
+            selected,
+            arguments["papers"],
+            timeout=arguments.get("timeout", 10.0),
         )
     if name == "search_author":
         return await aggregator.search_author(

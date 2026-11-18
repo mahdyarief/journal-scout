@@ -1,5 +1,6 @@
 {
   "api_key": "YOUR_ELSEVIER_API_KEY",
   "semantic_scholar_api_key": "",
+  "exa_api_keys": ["YOUR_EXA_API_KEY"],
   "polite_email": "you@example.com"
 }

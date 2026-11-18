@@ -91,7 +91,14 @@ class Fetcher:
                 retries -= 1
                 if retries <= 0:
                     break
-                await asyncio.sleep(min(backoff, MAX_BACKOFF_SECONDS))
+                retry_after = response.headers.get("Retry-After")
+                delay = backoff
+                if retry_after:
+                    try:
+                        delay = max(delay, float(retry_after))
+                    except ValueError:
+                        pass
+                await asyncio.sleep(min(delay, MAX_BACKOFF_SECONDS))
                 backoff *= 2
                 continue
             if last_status == 403:

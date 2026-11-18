@@ -50,6 +50,13 @@ def get_consensus_key() -> str:
     return key
 
 
+def get_exa_api_keys() -> list[str]:
+    """Multiple Exa keys, rotated by :mod:`josc.exa_client`."""
+    from .exa_client import load_exa_keys
+
+    return load_exa_keys(CONFIG_FILE)
+
+
 def get_polite_email() -> str:
     return (
         os.getenv("JOURNAL_SCOUT_EMAIL")

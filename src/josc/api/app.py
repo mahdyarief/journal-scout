@@ -61,6 +61,7 @@ from .search_routes import (
     search_author,
     searches,
 )
+from .settings_routes import settings_exa
 from .watch_routes import watch_delete, watch_feed, watches_list_create
 from ..watches import WatchStore
 from .state import _store, setup_state, teardown_state
@@ -135,6 +136,7 @@ routes = [
     Route("/api/watches", watches_list_create, methods=["GET", "POST"]),
     Route("/api/watches/{watch_id}", watch_delete, methods=["DELETE"]),
     Route("/api/watches/{watch_id}/feed", watch_feed),
+    Route("/api/settings/exa", settings_exa, methods=["GET", "POST"]),
 ]
 
 if WEB_DIST.is_dir():
