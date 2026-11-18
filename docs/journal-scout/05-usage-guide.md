@@ -265,3 +265,11 @@ per tahun.
   isi `polite_email` di `config.json` bila tersedia. Kunci Scopus dan Consensus
   dibaca dari environment (`SCOPUS_API_KEY`, `CONSENSUS_API_KEYS`); Exa berjalan
   tanpa key.
+- Consensus memakai kuota gratis bulanan. Bila habis, API menjawab 429 dengan
+  `code: "hard_cap_reached"` dan pesan "used 100% of your free usage this
+  month"; pesan itu kini diteruskan apa adanya di `errors`. Tunggu reset bulan
+  berikutnya atau pasang kunci akun lain lewat `rotate_consensus_key`.
+- Exa membalas sebagai teks biasa, bukan JSON. Hasilnya diurai per blok
+  (`Title`, `URL`, `Published`, `Author`, `Highlights`), dan `Highlights` dipakai
+  sebagai abstrak. Karena berasal dari pencarian web, kualitas abstrak beragam
+  dan tidak selalu sepanjang abstrak jurnal.

@@ -17,7 +17,9 @@ async def test_get_json_returns_payload():
 
     f = _fetcher(handler)
     try:
-        assert await f.get_json("https://example.test/x", provider="crossref") == {"ok": True}
+        assert await f.get_json("https://example.test/x", provider="crossref") == {
+            "ok": True
+        }
     finally:
         await f.close()
 
@@ -66,7 +68,9 @@ async def test_retries_then_succeeds():
 
     f = _fetcher(handler)
     try:
-        assert await f.get_json("https://example.test/x", provider="crossref") == {"ok": True}
+        assert await f.get_json("https://example.test/x", provider="crossref") == {
+            "ok": True
+        }
         assert calls["n"] == 2
     finally:
         await f.close()
@@ -84,7 +88,9 @@ async def test_retries_406_then_succeeds():
 
     f = _fetcher(handler)
     try:
-        assert await f.get_json("https://export.arxiv.org/api/query", provider="crossref") == {"ok": True}
+        assert await f.get_json(
+            "https://export.arxiv.org/api/query", provider="crossref"
+        ) == {"ok": True}
         assert calls["n"] == 2
     finally:
         await f.close()
@@ -124,7 +130,9 @@ async def test_retry_after_header_is_honoured(monkeypatch):
 
     f = _fetcher(handler)
     try:
-        assert await f.get_json("https://example.test/x", provider="unpaywall") == {"ok": True}
+        assert await f.get_json("https://example.test/x", provider="unpaywall") == {
+            "ok": True
+        }
         assert sleeps == [7.0]
     finally:
         await f.close()
@@ -173,6 +181,26 @@ async def test_elsevier_quota_error_message():
         await f.close()
 
 
+async def test_exhausted_429_keeps_the_upstream_reason():
+    def handler(request):
+        return httpx.Response(
+            429,
+            json={"detail": "You've used 100% of your free usage this month"},
+        )
+
+    f = _fetcher(handler)
+    try:
+        with pytest.raises(ProviderError) as exc:
+            await f.get_json(
+                "https://api.consensus.app/v1/search", provider="consensus"
+            )
+        message = str(exc.value)
+        assert "429" in message
+        assert "100% of your free usage" in message
+    finally:
+        await f.close()
+
+
 async def test_repeated_query_is_served_from_cache_without_second_call():
     calls = {"n": 0}
 
@@ -182,8 +210,12 @@ async def test_repeated_query_is_served_from_cache_without_second_call():
 
     f = _fetcher(handler)
     try:
-        first = await f.get_json("https://example.test/x", params={"q": "a"}, provider="crossref")
-        second = await f.get_json("https://example.test/x", params={"q": "a"}, provider="crossref")
+        first = await f.get_json(
+            "https://example.test/x", params={"q": "a"}, provider="crossref"
+        )
+        second = await f.get_json(
+            "https://example.test/x", params={"q": "a"}, provider="crossref"
+        )
         assert first == second == {"ok": True}
         # The upstream must be hit exactly once thanks to the cache.
         assert calls["n"] == 1
@@ -200,10 +232,16 @@ async def test_cache_is_keyed_by_params_and_provider():
 
     f = _fetcher(handler)
     try:
-        await f.get_json("https://example.test/x", params={"q": "a"}, provider="crossref")
+        await f.get_json(
+            "https://example.test/x", params={"q": "a"}, provider="crossref"
+        )
         # Different params and a different provider are distinct cache keys.
-        await f.get_json("https://example.test/x", params={"q": "b"}, provider="crossref")
-        await f.get_json("https://example.test/x", params={"q": "a"}, provider="openalex")
+        await f.get_json(
+            "https://example.test/x", params={"q": "b"}, provider="crossref"
+        )
+        await f.get_json(
+            "https://example.test/x", params={"q": "a"}, provider="openalex"
+        )
         assert calls["n"] == 3
     finally:
         await f.close()

@@ -1,4 +1,4 @@
-import { Card, Chip, LINK_CLASS, PageHeader, Panel } from "../components/ui";
+import { Card, Chip, LINK_CLASS, PageHeader } from "../components/ui";
 
 type ToolEntry = {
   name: string;
@@ -65,83 +65,151 @@ const GROUPS: ToolEntry["group"][] = [
 
 export function DocsPage() {
   return (
-    <div className="w-full space-y-5">
+    <div className="mx-auto w-full max-w-7xl space-y-6">
       <PageHeader
-        title="Using the MCP server"
-        description="Hubungkan klien MCP ke journal-scout, lalu panggil tools untuk mencari, menggabungkan, dan mengekspor literatur."
+        title="Dokumentasi MCP"
+        description="Hubungkan klien MCP ke journal-scout dan gunakan tools untuk mencari, menelusuri, serta mengekspor literatur."
       />
 
-      <Panel className="space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold">Connect a client</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Endpoint Streamable HTTP tersedia di <code>{MCP_URL}</code>. Untuk
-            deploy publik, sertakan bearer token bila <code>JOSC_MCP_TOKEN</code>{" "}
-            diaktifkan.
-          </p>
+      <section
+        aria-labelledby="connection-title"
+        className="grid grid-cols-1 gap-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)] lg:items-center"
+      >
+        <div className="min-w-0 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-300">
+              Streamable HTTP
+            </p>
+          </div>
+          <div>
+            <h2 id="connection-title" className="text-lg font-semibold tracking-tight text-slate-100">
+              Hubungkan klien MCP
+            </h2>
+            <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-400">
+              Gunakan endpoint di bawah. Untuk deployment yang mengaktifkan{" "}
+              <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200">
+                JOSC_MCP_TOKEN
+              </code>
+              , tambahkan bearer token ke konfigurasi klien.
+            </p>
+          </div>
+          <a className={LINK_CLASS} href="/healthz" target="_blank" rel="noreferrer">
+            Periksa status server <span aria-hidden="true">↗</span>
+          </a>
         </div>
-        <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-          {`{
+
+        <pre className="min-w-0 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 p-4 text-xs leading-6 text-slate-300">
+          <code>{`{
   "mcpServers": {
     "journal-scout": {
       "type": "http",
       "url": "${MCP_URL}"
     }
   }
-}`}
+}`}</code>
         </pre>
-        <div className="flex flex-wrap gap-2">
-          <a className={LINK_CLASS} href="/healthz" target="_blank" rel="noreferrer">
-            Health check
-          </a>
-        </div>
-      </Panel>
+      </section>
 
-      <Card className="space-y-2">
-        <h2 className="text-sm font-semibold">Contoh alur</h2>
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>
-            <code>search_all</code> dengan query boolean uppercase:{" "}
-            <code>&quot;insurance AND AI&quot;</code>. Operator lowercase tidak
-            diterjemahkan.
-          </li>
-          <li>
-            <code>get_abstracts</code> dengan hasil tersebut untuk melengkapi
-            abstrak yang kosong.
-          </li>
-          <li>
-            <code>get_citations</code> atau <code>build_citation_network</code>{" "}
-            untuk menelusuri kutipan, lalu <code>export_results</code> untuk
-            BibTeX/CSV.
-          </li>
-        </ol>
-        <p className="text-xs text-muted-foreground">
-          Selalu cek field <code>errors</code> pada respons: satu sumber yang
-          gagal tidak menggagalkan pencarian, tetapi hasilnya jadi tidak lengkap.
-        </p>
-      </Card>
-
-      <div className="space-y-3">
-        {GROUPS.map((group) => (
-          <Panel key={group} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">{group}</h2>
-              <Chip variant="secondary">
-                {TOOLS.filter((t) => t.group === group).length}
-              </Chip>
-            </div>
-            <dl className="divide-y divide-border text-sm">
-              {TOOLS.filter((t) => t.group === group).map((tool) => (
-                <div key={tool.name} className="grid gap-1 py-2 sm:grid-cols-[minmax(0,14rem)_1fr] sm:gap-4">
-                  <dt>
-                    <code className="text-xs font-medium">{tool.name}</code>
-                  </dt>
-                  <dd className="text-muted-foreground">{tool.purpose}</dd>
-                </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+          <nav
+            aria-label="Navigasi dokumentasi"
+            className="rounded-xl border border-slate-800 bg-slate-900/30 p-3"
+          >
+            <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Di halaman ini
+            </p>
+            <div className="flex flex-wrap gap-1 lg:flex-col lg:flex-nowrap">
+              <a
+                href="#workflow"
+                className="rounded-md px-2 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100"
+              >
+                Alur kerja
+              </a>
+              {GROUPS.map((group) => (
+                <a
+                  key={group}
+                  href={`#tools-${group.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                  className="rounded-md px-2 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100"
+                >
+                  {group}
+                </a>
               ))}
-            </dl>
-          </Panel>
-        ))}
+            </div>
+          </nav>
+        </aside>
+
+        <main className="min-w-0 space-y-5">
+          <Card id="workflow" className="space-y-4 p-4 sm:p-5">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-sky-300">
+                Mulai di sini
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-slate-100">Alur riset yang umum</h2>
+            </div>
+            <ol className="grid gap-3 sm:grid-cols-3">
+              <li className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                <span className="text-xs font-medium text-slate-500">01</span>
+                <p className="mt-2 text-sm text-slate-300">
+                  Cari lintas sumber dengan <code className="text-sky-300">search_all</code> dan operator boolean huruf besar, misalnya <code className="text-slate-200">insurance AND AI</code>.
+                </p>
+              </li>
+              <li className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                <span className="text-xs font-medium text-slate-500">02</span>
+                <p className="mt-2 text-sm text-slate-300">
+                  Lengkapi abstrak yang kosong memakai <code className="text-sky-300">get_abstracts</code>.
+                </p>
+              </li>
+              <li className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                <span className="text-xs font-medium text-slate-500">03</span>
+                <p className="mt-2 text-sm text-slate-300">
+                  Telusuri sitasi, lalu ekspor pustaka dengan <code className="text-sky-300">export_results</code>.
+                </p>
+              </li>
+            </ol>
+            <p className="border-t border-slate-800 pt-3 text-xs leading-5 text-slate-400">
+              Periksa <code className="text-slate-300">errors</code> pada respons. Kegagalan satu sumber tidak menghentikan pencarian, tetapi hasilnya mungkin tidak lengkap.
+            </p>
+          </Card>
+
+          <div className="space-y-4">
+            {GROUPS.map((group) => {
+              const tools = TOOLS.filter((tool) => tool.group === group);
+              const id = `tools-${group.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+              return (
+                <section
+                  key={group}
+                  id={id}
+                  aria-labelledby={`${id}-title`}
+                  className="scroll-mt-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/30"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
+                    <h2 id={`${id}-title`} className="text-sm font-semibold text-slate-100">
+                      {group}
+                    </h2>
+                    <Chip variant="secondary">{tools.length} tools</Chip>
+                  </div>
+                  <dl className="divide-y divide-slate-800/80">
+                    {tools.map((tool) => (
+                      <div
+                        key={tool.name}
+                        className="grid gap-1.5 px-4 py-3 sm:grid-cols-[minmax(10rem,0.32fr)_minmax(0,1fr)] sm:gap-5 sm:px-5"
+                      >
+                        <dt>
+                          <code className="break-all rounded bg-slate-800/70 px-1.5 py-1 text-xs font-medium text-sky-200">
+                            {tool.name}
+                          </code>
+                        </dt>
+                        <dd className="text-sm leading-6 text-slate-400">{tool.purpose}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })}
+          </div>
+        </main>
       </div>
     </div>
   );

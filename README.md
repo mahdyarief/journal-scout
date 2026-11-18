@@ -103,10 +103,15 @@ limits on OpenAlex, Crossref, and Unpaywall.
 `EXA_API_KEY`) is set, pass a comma- or semicolon-separated list or a JSON
 array to rotate across keys round-robin, and an HTTP 401/429 moves the client
 to the next key. Keys are read from the environment only, so no file inside
-the container is written.
+the container is written. Exa answers with plain text rather than JSON; the
+provider parses the `Title` / `URL` / `Published` / `Author` / `Highlights`
+blocks and uses `Highlights` as the abstract.
 
 Consensus keys work the same way: set `CONSENSUS_API_KEYS` to a list (or
 `CONSENSUS_API_KEY` for a single key) and the provider rotates on 401/429.
+The free tier has a monthly quota: once it is spent the API replies 429 with
+`code: "hard_cap_reached"`, and that explanation is passed through in the
+tool's `errors` instead of a bare status code.
 
 ## Rate limits
 

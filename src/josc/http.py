@@ -64,6 +64,7 @@ class Fetcher:
         retries = MAX_RETRIES
         last_exc: Optional[Exception] = None
         last_status: Optional[int] = None
+        last_body = ""
         while retries > 0:
             await self._throttle(provider)
             try:
@@ -76,6 +77,7 @@ class Fetcher:
                 continue
 
             last_status = response.status_code
+            last_body = response.text[:200]
             # arXiv signals its per-IP rate limit with 406 rather than 429;
             # retrying matters because _throttle() re-applies the provider
             # interval before the next attempt.
@@ -128,9 +130,13 @@ class Fetcher:
             return response
 
         if last_exc:
-            raise ProviderError(provider or "unknown", f"Request failed after retries ({last_exc})")
+            raise ProviderError(
+                provider or "unknown", f"Request failed after retries ({last_exc})"
+            )
+        detail = f": {last_body}" if last_body else ""
         raise ProviderError(
-            provider or "unknown", f"Request failed after retries (last status={last_status})"
+            provider or "unknown",
+            f"Request failed after retries (last status={last_status}){detail}",
         )
 
     @staticmethod
@@ -149,7 +155,9 @@ class Fetcher:
                 provider or "unknown", f"Expected JSON but got: {body}"
             ) from e
 
-    async def get_json(self, url, params=None, headers=None, provider=None) -> Dict[str, Any]:
+    async def get_json(
+        self, url, params=None, headers=None, provider=None
+    ) -> Dict[str, Any]:
         key = self._cache_key(url, params, provider)
         if key is not None:
             cached = self.cache.get(key)
