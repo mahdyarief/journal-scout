@@ -2,6 +2,12 @@ import httpx
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _no_real_curl(monkeypatch):
+    """Never shell out to curl from tests; tests opt in with a fake curl_get."""
+    monkeypatch.setenv("JOURNAL_SCOUT_CURL", "0")
+
+
 @pytest.fixture
 def polite_email():
     return "test@example.com"

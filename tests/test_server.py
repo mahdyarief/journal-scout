@@ -560,7 +560,7 @@ async def test_dispatch_get_fulltext_delegates_to_fulltext_fetch(monkeypatch):
 
     captured = {}
 
-    async def fake_fetch(providers, identifier, max_chars=20_000, scinet=None):
+    async def fake_fetch(providers, identifier, max_chars=20_000, scinet=None, curl=None):
         captured["providers"] = providers
         captured["scinet"] = scinet
         captured["identifier"] = identifier

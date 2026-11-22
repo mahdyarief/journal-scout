@@ -18,6 +18,7 @@ import re
 from typing import Any, List
 from urllib.parse import quote, urljoin
 
+from . import curl_fetch
 from .config import get_polite_email
 from .models import ProviderError
 
@@ -102,14 +103,22 @@ async def find_crossref_pdf_links(fetcher: Any, doi: str) -> List[str]:
     return crossref_pdf_links((data or {}).get("message") or {})
 
 
-async def find_landing_pdf_links(fetcher: Any, doi: str) -> List[str]:
+async def find_landing_pdf_links(fetcher: Any, doi: str, use_curl: bool = False) -> List[str]:
+    """PDF links on the DOI's landing page: curl first, httpx as the fallback."""
+    url = DOI_RESOLVER_URL.format(doi=_doi_path(doi))
+    if use_curl:
+        try:
+            final_url, body = await curl_fetch.curl_get(url, LANDING_HEADERS)
+            links = landing_pdf_links(body.decode("utf-8", "replace"), final_url)
+            if links:
+                return links
+        except ProviderError:
+            pass
     if fetcher is None or not hasattr(fetcher, "get_page"):
         return []
     try:
         final_url, page_html = await fetcher.get_page(
-            DOI_RESOLVER_URL.format(doi=_doi_path(doi)),
-            headers=LANDING_HEADERS,
-            provider="landing",
+            url, headers=LANDING_HEADERS, provider="landing"
         )
     except (ProviderError, ValueError):
         return []

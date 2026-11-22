@@ -362,7 +362,8 @@ def _tool_list() -> List[types.Tool]:
                 "(pypdf) on the server. When no OA PDF works and the Sci-Net fallback "
                 "is enabled (config 'scinet_fallback' / env JOURNAL_SCOUT_SCINET, or "
                 "scinet=true), the DOI is looked up on sci-net.xyz. 'pdf_source' says "
-                "which route was used. Returns status='no_oa' for paywalled papers "
+                "which route was used; PDFs are downloaded with system curl first "
+                "and the Python HTTP client as fallback ('via' names which). Returns status='no_oa' for paywalled papers "
                 "and status='error' with a message when extraction fails."
             ),
             inputSchema={
@@ -381,6 +382,10 @@ def _tool_list() -> List[types.Tool]:
                     "scinet": {
                         "type": "boolean",
                         "description": "Override the server's Sci-Net fallback setting for this call.",
+                    },
+                    "curl": {
+                        "type": "boolean",
+                        "description": "Override the server's curl-first setting (default on) for this call; false uses only the Python client.",
                     },
                 },
                 "required": ["identifier"],
@@ -717,6 +722,7 @@ async def build_json(name: str, arguments: Dict[str, Any], providers, scopus_pro
             arguments["identifier"],
             max_chars=max_chars,
             scinet=arguments.get("scinet"),
+            curl=arguments.get("curl"),
         )
     if name == "batch_lookup":
         return await aggregator.batch_lookup(

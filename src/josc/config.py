@@ -126,3 +126,17 @@ def get_scinet_enabled() -> bool:
     if isinstance(raw, bool):
         return raw
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def get_curl_enabled() -> bool:
+    """Whether ``get_fulltext`` downloads with system curl before httpx.
+
+    On by default (skipped when ``curl`` is not on PATH; httpx stays the
+    fallback either way). Disable with ``JOURNAL_SCOUT_CURL=0`` or ``"curl_fallback": false``.
+    """
+    raw = os.getenv("JOURNAL_SCOUT_CURL")
+    if raw is None:
+        raw = load_config_file().get("curl_fallback", True)
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")

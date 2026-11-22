@@ -11,9 +11,9 @@ import asyncio
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import pdf_links
+from . import curl_fetch, pdf_links
 from . import scinet as scinet_client
-from .config import get_scinet_enabled
+from .config import get_curl_enabled, get_scinet_enabled
 from .models import Paper, ProviderError
 from .pdf_text import extract_pdf_text_from_bytes
 from .providers.base import ProviderBase
@@ -170,6 +170,13 @@ async def _download_text(
     return extract_pdf_text_from_bytes(data)
 
 
+async def _curl_download_text(url: str, headers: Optional[Dict[str, str]]) -> str:
+    _final_url, data = await curl_fetch.curl_get(url, headers or PUBLISHER_HEADERS)
+    if not _looks_like_pdf(data):
+        raise ValueError(f"{url} did not return a PDF via curl (bot challenge?)")
+    return extract_pdf_text_from_bytes(data)
+
+
 def _result(identifier: str, status: str, **fields: Any) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "identifier": identifier,
@@ -187,6 +194,7 @@ async def fetch_fulltext(
     identifier: str,
     max_chars: int = DEFAULT_MAX_CHARS,
     scinet: Optional[bool] = None,
+    curl: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Resolve ``identifier`` to a PDF and return its extracted text.
 
@@ -200,10 +208,19 @@ async def fetch_fulltext(
     5. ``scinet``: only when enabled (``None`` reads
        :func:`josc.config.get_scinet_enabled`).
 
+    Each URL is downloaded with system ``curl`` first and retried with httpx
+    if curl fails. ``curl`` (``None`` reads :func:`josc.config.get_curl_enabled`)
+    turns the curl step off; it is skipped anyway when curl is not on PATH.
+    Some publisher front ends serve curl while challenging httpx. ``via`` in
+    the result names the client that produced the text.
+
     ``pdf_source`` names the route that produced the text; ``attempts`` lists
     the ones that failed before it.
     """
     use_scinet = get_scinet_enabled() if scinet is None else scinet
+    use_curl = (get_curl_enabled() if curl is None else curl) and bool(
+        curl_fetch.curl_path()
+    )
     paper = await _resolve(providers, identifier)
     resolved = paper is not None
     if paper is None:
@@ -238,7 +255,11 @@ async def fetch_fulltext(
         return [("crossref", url) for url in urls]
 
     async def _landing() -> List[Tuple[str, str]]:
-        urls = await pdf_links.find_landing_pdf_links(fetcher, doi) if doi else []
+        urls = (
+            await pdf_links.find_landing_pdf_links(fetcher, doi, use_curl=use_curl)
+            if doi
+            else []
+        )
         return [("landing", url) for url in urls]
 
     async def _publisher() -> List[Tuple[str, str]]:
@@ -256,17 +277,34 @@ async def fetch_fulltext(
 
     attempts: List[Dict[str, str]] = []
     tried: set = set()
+    via: Dict[str, Optional[str]] = {"value": None}
 
     async def _try(source: str, url: str) -> Optional[str]:
         # The record's own links keep the default client headers; publisher
         # pages get a browser-like UA, which their front ends expect.
         headers = None if source in ("open_access", "arxiv") else PUBLISHER_HEADERS
-        try:
-            return await _download_text(fetcher, url, headers)
-        except ProviderError as exc:
-            attempts.append({"source": source, "pdf_url": url, "error": exc.message})
-        except Exception as exc:  # pypdf missing, malformed PDF, HTML page, ...
-            attempts.append({"source": source, "pdf_url": url, "error": str(exc)})
+        # curl first: publisher front ends that challenge httpx usually serve
+        # curl. httpx (cached, in-process) is the fallback, and the only
+        # client when curl is disabled or missing.
+        clients = [
+            ("curl", lambda: _curl_download_text(url, headers)),
+            ("httpx", lambda: _download_text(fetcher, url, headers)),
+        ]
+        if not use_curl:
+            clients = clients[1:]
+        for client, download in clients:
+            try:
+                text = await download()
+            except ProviderError as exc:
+                error = exc.message
+            except Exception as exc:  # pypdf missing, malformed PDF, HTML page, ...
+                error = str(exc)
+            else:
+                via["value"] = client
+                return text
+            attempts.append(
+                {"source": source, "pdf_url": url, "via": client, "error": error}
+            )
         return None
 
     text: Optional[str] = None
@@ -304,6 +342,8 @@ async def fetch_fulltext(
         chars=min(len(text), max_chars),
         paper=paper.to_dict(),
     )
+    if via["value"]:
+        payload["via"] = via["value"]
     if attempts:
         payload["attempts"] = attempts
     return payload

@@ -3,5 +3,6 @@
   "consensus_api_key": "",
   "openalex_api_key": "",
   "polite_email": "you@example.com",
-  "scinet_fallback": false
+  "scinet_fallback": false,
+  "curl_fallback": true
 }
