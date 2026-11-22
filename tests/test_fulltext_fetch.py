@@ -9,7 +9,7 @@ class FakeFetcher:
         self.error = error
         self.calls = []
 
-    async def get_bytes(self, url, params=None, headers=None, provider=None):
+    async def get_bytes(self, url, params=None, headers=None, provider=None, **kwargs):
         self.calls.append(url)
         if self.error is not None:
             raise self.error

@@ -560,8 +560,9 @@ async def test_dispatch_get_fulltext_delegates_to_fulltext_fetch(monkeypatch):
 
     captured = {}
 
-    async def fake_fetch(providers, identifier, max_chars=20_000):
+    async def fake_fetch(providers, identifier, max_chars=20_000, scinet=None):
         captured["providers"] = providers
+        captured["scinet"] = scinet
         captured["identifier"] = identifier
         captured["max_chars"] = max_chars
         return {"status": "found", "full_text": "body", "truncated": False}
@@ -569,9 +570,13 @@ async def test_dispatch_get_fulltext_delegates_to_fulltext_fetch(monkeypatch):
     monkeypatch.setattr(server, "fetch_fulltext", fake_fetch)
     provider = FulltextPaperProvider()
     result = await build_json(
-        "get_fulltext", {"identifier": "10.1/x", "max_chars": 1234}, [provider], None
+        "get_fulltext",
+        {"identifier": "10.1/x", "max_chars": 1234, "scinet": True},
+        [provider],
+        None,
     )
     assert result["status"] == "found"
     assert captured["identifier"] == "10.1/x"
     assert captured["max_chars"] == 1234
     assert captured["providers"] == [provider]
+    assert captured["scinet"] is True

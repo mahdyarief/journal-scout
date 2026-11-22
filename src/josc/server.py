@@ -359,7 +359,10 @@ def _tool_list() -> List[types.Tool]:
                 "Fetch the open-access full text of one paper: resolve the identifier "
                 "across lookup sources, download the best OA PDF (Unpaywall link or "
                 "arXiv PDF), and extract its text. Requires the optional 'pdf' extra "
-                "(pypdf) on the server. Returns status='no_oa' for paywalled papers "
+                "(pypdf) on the server. When no OA PDF works and the Sci-Net fallback "
+                "is enabled (config 'scinet_fallback' / env JOURNAL_SCOUT_SCINET, or "
+                "scinet=true), the DOI is looked up on sci-net.xyz. 'pdf_source' says "
+                "which route was used. Returns status='no_oa' for paywalled papers "
                 "and status='error' with a message when extraction fails."
             ),
             inputSchema={
@@ -375,6 +378,10 @@ def _tool_list() -> List[types.Tool]:
                         "description": "Cap the returned text length; longer text is truncated with truncated=true.",
                     },
                     "sources": {"type": "array", "items": {"type": "string"}},
+                    "scinet": {
+                        "type": "boolean",
+                        "description": "Override the server's Sci-Net fallback setting for this call.",
+                    },
                 },
                 "required": ["identifier"],
             },
@@ -705,7 +712,12 @@ async def build_json(name: str, arguments: Dict[str, Any], providers, scopus_pro
         # Clamp to the tool-result budget: a bigger cap would be truncated by
         # the transport anyway, so the server keeps responses deliverable.
         max_chars = min(arguments.get("max_chars", 20_000), MAX_TOOL_RESULT_CHARS)
-        return await fetch_fulltext(selected, arguments["identifier"], max_chars=max_chars)
+        return await fetch_fulltext(
+            selected,
+            arguments["identifier"],
+            max_chars=max_chars,
+            scinet=arguments.get("scinet"),
+        )
     if name == "batch_lookup":
         return await aggregator.batch_lookup(
             providers,

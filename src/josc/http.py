@@ -59,7 +59,7 @@ class Fetcher:
         items = tuple(sorted((params or {}).items()))
         return (provider, url, items)
 
-    async def _request(self, url, params, headers, provider):
+    async def _request(self, url, params, headers, provider, follow_redirects=False):
         backoff = 1.0
         retries = MAX_RETRIES
         last_exc: Optional[Exception] = None
@@ -68,7 +68,10 @@ class Fetcher:
         while retries > 0:
             await self._throttle(provider)
             try:
-                response = await self.client.get(url, params=params, headers=headers)
+                extra = {"follow_redirects": True} if follow_redirects else {}
+                response = await self.client.get(
+                    url, params=params, headers=headers, **extra
+                )
             except httpx.HTTPError as e:
                 last_exc = e
                 retries -= 1
@@ -188,17 +191,42 @@ class Fetcher:
             self.cache.set(key, text)
         return text
 
-    async def get_bytes(self, url, params=None, headers=None, provider=None) -> bytes:
+    async def get_bytes(
+        self, url, params=None, headers=None, provider=None, follow_redirects=False
+    ) -> bytes:
         key = self._cache_key(url, params, provider)
         if key is not None:
             cached = self.cache.get(key)
             if cached is not None:
                 return cached
-        response = await self._request(url, params, headers, provider)
+        response = await self._request(
+            url, params, headers, provider, follow_redirects=follow_redirects
+        )
         content = response.content
         if key is not None:
             self.cache.set(key, content)
         return content
+
+    async def get_page(
+        self, url, params=None, headers=None, provider=None
+    ) -> Tuple[str, str]:
+        """Follow redirects and return ``(final_url, html)``.
+
+        The final URL matters when the page links resources relatively, e.g. a
+        DOI resolved through doi.org to a publisher landing page.
+        """
+        key = self._cache_key(("page", url), params, provider)
+        if key is not None:
+            cached = self.cache.get(key)
+            if cached is not None:
+                return cached
+        response = await self._request(
+            url, params, headers, provider, follow_redirects=True
+        )
+        page = (str(response.url), response.text)
+        if key is not None:
+            self.cache.set(key, page)
+        return page
 
     async def close(self) -> None:
         await self.client.aclose()

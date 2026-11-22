@@ -111,3 +111,18 @@ def get_turso_url() -> Optional[str]:
 
 def get_turso_token() -> Optional[str]:
     return os.getenv("TURSO_AUTH_TOKEN") or load_config_file().get("turso_token")
+
+
+def get_scinet_enabled() -> bool:
+    """Whether ``get_fulltext`` may fall back to Sci-Net for non-OA papers.
+
+    Off by default: Sci-Net hosts papers outside their publishers' licences, so
+    using it is the operator's call. Enable with ``JOURNAL_SCOUT_SCINET=1`` or
+    ``"scinet_fallback": true`` in config.json.
+    """
+    raw = os.getenv("JOURNAL_SCOUT_SCINET")
+    if raw is None:
+        raw = load_config_file().get("scinet_fallback", False)
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
