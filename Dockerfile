@@ -16,6 +16,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# get_fulltext downloads PDFs with system curl first (some publisher front ends
+# challenge the Python HTTP client but serve curl); slim images ship without it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY --from=web-build /web/dist ./web/dist

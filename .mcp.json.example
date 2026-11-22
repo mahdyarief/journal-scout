@@ -1,6 +1,14 @@
 {
   "journal-scout": {
-    "type": "http",
-    "url": "https://journal.nimb.us.ci/mcp"
+    "type": "stdio",
+    "command": "uv",
+    "args": [
+      "run",
+      "--directory",
+      "${CLAUDE_PLUGIN_ROOT}",
+      "--extra",
+      "pdf",
+      "journal-scout"
+    ]
   }
 }

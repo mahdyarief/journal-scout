@@ -13,6 +13,59 @@ Citation links come from OpenCitations as well: 300M+ DOI-to-DOI links, free,
 no API key, no approval. It is not a searchable source — it only answers
 citation and reference queries for a known DOI or OpenCitations id.
 
+## Install: three ways to run it
+
+| Mode | Runs where | Needs | Config |
+|---|---|---|---|
+| **A. Claude plugin → hosted server** (default) | Someone else's server | Nothing local | Server operator's keys |
+| **B. Claude plugin → local stdio** | Your machine, launched by Claude | Python 3.10+, [`uv`](https://docs.astral.sh/uv/), `curl` | `config.json` or env vars |
+| **C. Self-hosted HTTP** (Docker) | Your server | Docker | Env vars only |
+
+### A. Claude plugin, hosted server
+
+The shipped `.mcp.json` points the plugin at a hosted Streamable HTTP endpoint:
+
+```json
+{ "journal-scout": { "type": "http", "url": "https://journal.nimb.us.ci/mcp" } }
+```
+
+Install the plugin and the tools appear; nothing runs locally. You depend on
+that server being up and on its operator's API keys and settings (for example
+whether the Sci-Net fallback is on). To point at your own deployment instead,
+copy `.mcp.remote.json.example` and change the URL; add
+`"headers": {"Authorization": "Bearer <token>"}` when the server sets
+`JOSC_MCP_TOKEN`.
+
+### B. Claude plugin, local stdio (no server)
+
+Run the MCP server as a child process of Claude, with your own keys:
+
+```bash
+cp .mcp.json.example .mcp.json        # stdio launcher, shown below
+cp config.json.example config.json    # then fill in your keys
+uv sync --extra pdf                   # optional: pre-build the venv
+```
+
+```json
+{
+  "journal-scout": {
+    "type": "stdio",
+    "command": "uv",
+    "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "--extra", "pdf", "journal-scout"]
+  }
+}
+```
+
+`${CLAUDE_PLUGIN_ROOT}` expands to the installed plugin directory; outside a
+plugin, replace it with the absolute path of this repo. `config.json` is read
+from the repo root (it is git-ignored), and env vars override it. Restart
+Claude after changing `.mcp.json`.
+
+### C. Self-hosted HTTP server
+
+See [Remote MCP server](#remote-mcp-server) below: one Docker image serves
+`/mcp`, the `josc-web` UI, and the REST API.
+
 ## Tools (43)
 
 | Unified (11) | Papers & abstracts (5) | Per-source (8) |
@@ -57,25 +110,55 @@ has one; nothing is guessed from the title, and an existing abstract is never
 overwritten. Provider errors and timeouts are reported per source instead of
 aborting the batch.
 
-### Full text (open access only)
+### Full text
 
 `get_fulltext` resolves one identifier through the same lookup path as
-`get_paper` (including the Unpaywall enricher), downloads the best open-access
-PDF, and returns its extracted text. arXiv records without a resolved PDF link
-fall back to `https://arxiv.org/pdf/<id>`.
+`get_paper` (including the Unpaywall enricher), then tries PDF routes in order,
+moving on only when a route fails (HTTP error, or a reply that is not a PDF,
+such as a landing page or bot challenge):
+
+| # | `pdf_source` | Where the PDF link comes from |
+|---|---|---|
+| 1 | `open_access`, `arxiv` | The record's own OA link, then `https://arxiv.org/pdf/<id>` |
+| 2 | `crossref` | `application/pdf` links the publisher deposited at Crossref |
+| 3 | `landing` | `<meta name="citation_pdf_url">` on the page `doi.org/<doi>` redirects to |
+| 4 | `acm`, `nejm_ai`, `peerj` | Built-in URL patterns for `10.1145/`, `10.1056/AI…`, `10.7717/peerj…` |
+| 5 | `scinet` | `sci-net.xyz/<doi>`, **only when enabled** (see below) |
+
+Steps 2 and 3 work for any publisher, so new publishers rarely need a pattern.
+A DOI that no metadata source knows can still be fetched by these DOI-only
+routes.
+
+Each URL is downloaded with **system `curl` first**, and retried with the Python
+HTTP client (httpx) if curl fails; some publisher front ends (e.g. Springer's
+"Client Challenge") refuse httpx but serve curl. Without `curl` on `PATH`, only
+httpx is used.
 
 | Field | Meaning |
 |---|---|
 | `status` | `found`, `no_oa`, `not_found`, or `error` |
 | `full_text` | Extracted text, capped by `max_chars` (default 20,000) |
 | `truncated` | True when the source text was longer than `max_chars` |
-| `error` | Download or extraction failure reason, for `status="error"` |
+| `pdf_url` | The PDF that produced the text (or the last one tried, on error) |
+| `pdf_source` | The route above that succeeded |
+| `via` | `curl` or `httpx`: the client that downloaded it |
+| `attempts` | Every failed `{source, pdf_url, via, error}` before the result |
+| `error` | Last failure reason, for `status="error"` |
+
+| Setting | Env var | `config.json` | Tool argument | Default |
+|---|---|---|---|---|
+| Sci-Net fallback | `JOURNAL_SCOUT_SCINET=1` | `"scinet_fallback": true` | `scinet` | **off** |
+| curl first | `JOURNAL_SCOUT_CURL=0` | `"curl_fallback": false` | `curl` | on |
+
+Steps 1–4 only fetch copies the publisher or a repository serves openly; a
+paper with no such copy reports `no_oa`. Sci-Net is different: it hosts papers
+outside their publishers' licences, so it is opt-in, always labelled
+`pdf_source="scinet"`, and whether to enable it is the operator's call.
 
 Extraction needs `pypdf`, which ships in the `pdf` extra
 (`pip install "journal-scout[pdf]"`) and is installed in the Docker image. A
 server without it returns `status="error"` with an install hint rather than an
-empty string. This is not a paywall bypass: a paper with no OA copy reports
-`no_oa`.
+empty string.
 
 ### Batch lookup
 
@@ -200,10 +283,19 @@ default when running from source.
 
 ```bash
 docker build -t journal-scout .
-docker run --rm -p 8080:8080 \
-  -e JOSC_MCP_TOKEN="$(openssl rand -hex 32)" \
+TOKEN="$(openssl rand -hex 32)"; echo "MCP token: $TOKEN"
+docker run -d --name journal-scout -p 8080:8080 \
+  -e JOSC_MCP_TOKEN="$TOKEN" \
+  -e SCOPUS_API_KEY=... \
+  -e JOURNAL_SCOUT_EMAIL=you@example.com \
   journal-scout
+curl http://localhost:8080/healthz
 ```
+
+Inside the image, pass every key and setting as an **environment variable**
+(or `--env-file .env`): the package is installed into site-packages, so the
+repo-root `config.json` that a source checkout reads is not used. The image
+includes `curl` for the curl-first PDF downloads.
 
 Configure remote MCP clients with URL `https://<your-domain>/mcp` and send
 `Authorization: Bearer <token>` when authentication is enabled. The plugin's
@@ -218,6 +310,21 @@ Environment variables:
 | `JOSC_HOST` | `0.0.0.0` | HTTP bind address |
 | `JOSC_PORT` | `8080` | HTTP listen port |
 | `JOSC_MCP_TOKEN` | unset | Optional bearer token; set it for public deployments |
+| `JOSC_WEB_DIST` | `/app/web/dist` in Docker | Built UI directory served at `/` |
+
+API keys and behaviour (each also has a `config.json` key for source checkouts):
+
+| Variable | `config.json` key | Purpose |
+|---|---|---|
+| `SCOPUS_API_KEY` | `api_key` | Elsevier key; required for Scopus / SciVal tools |
+| `OPENALEX_API_KEY` | `openalex_api_key` | OpenAlex premium key |
+| `CONSENSUS_API_KEYS` / `CONSENSUS_API_KEY` | `consensus_api_key` | Consensus key list (rotated) or single key |
+| `EXA_API_KEYS` / `EXA_API_KEY` | — | Optional Exa keys (rotated); env only |
+| `JOURNAL_SCOUT_EMAIL` | `polite_email` | Contact email for OpenAlex / Crossref / Unpaywall polite pools |
+| `JOURNAL_SCOUT_CACHE_TTL` | `cache_ttl` | Seconds to cache identical upstream queries (`0` disables) |
+| `JOURNAL_SCOUT_SCINET` | `scinet_fallback` | Enable the Sci-Net full-text fallback (default off) |
+| `JOURNAL_SCOUT_CURL` | `curl_fallback` | Download PDFs with curl first (default on) |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | `turso_url`, `turso_token` | Optional libSQL/Turso persistence for history and watches |
 
 ## josc-web
 
@@ -276,10 +383,14 @@ The UI has four routes: `/` (search), `/graph`, `/metrics`, and `/history`
 ## Development
 
 ```bash
-uv venv
-uv pip install -e ".[dev]"
-pytest
+uv sync --extra dev --extra pdf --extra server
+uv run pytest
+uv run ruff check src tests
 ```
+
+Run the tests through `uv run`: the lockfile pins `mcp` 1.x, and a global
+Python with `mcp` 2.x fails the schema tests (`Tool.inputSchema` was renamed).
+Tests never call real `curl`; `tests/conftest.py` disables it.
 
 ## License
 
