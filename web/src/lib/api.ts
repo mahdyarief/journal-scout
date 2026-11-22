@@ -321,3 +321,61 @@ export function graphmlUrl(identifier: string, limit: number, citingLimit: numbe
   });
   return `/api/network?${search.toString()}`;
 }
+
+export type PdfDownload = {
+  blob: Blob;
+  filename: string;
+  source: string | null;
+  via: string | null;
+  pdfUrl: string | null;
+  title: string | null;
+};
+
+function decodeHeader(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function attachmentName(disposition: string | null, fallback: string): string {
+  const match = disposition?.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || fallback;
+}
+
+/**
+ * Fetch a paper's PDF through `/api/pdf`. `scinet` overrides the server's
+ * Sci-Net fallback for this request; leave it undefined for the server default.
+ */
+export async function downloadPdf(
+  identifier: string,
+  options: { scinet?: boolean; signal?: AbortSignal } = {},
+): Promise<PdfDownload> {
+  const search = new URLSearchParams({ identifier });
+  if (options.scinet !== undefined) search.set("scinet", String(options.scinet));
+  const response = await fetch(`/api/pdf?${search.toString()}`, { signal: options.signal });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; status?: string }
+      | null;
+    const reason =
+      payload?.error ||
+      (payload?.status === "no_oa"
+        ? "No downloadable PDF found for this paper."
+        : payload?.status === "not_found"
+          ? "No source recognises this identifier."
+          : `Request failed (${response.status})`);
+    throw new Error(reason);
+  }
+  const fallback = `${identifier.replace(/[^A-Za-z0-9._-]+/g, "_")}.pdf`;
+  return {
+    blob: await response.blob(),
+    filename: attachmentName(response.headers.get("content-disposition"), fallback),
+    source: response.headers.get("x-pdf-source") || null,
+    via: response.headers.get("x-pdf-via") || null,
+    pdfUrl: decodeHeader(response.headers.get("x-pdf-url")),
+    title: decodeHeader(response.headers.get("x-paper-title")),
+  };
+}

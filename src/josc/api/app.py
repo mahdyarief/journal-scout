@@ -24,6 +24,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
+from .pdf_routes import pdf_download
 from .recognize_routes import identify
 from .library_routes import (
     export,
@@ -132,6 +133,7 @@ routes = [
     Route("/api/export/graphml", graphml_export),
     Route("/api/export", export, methods=["POST"]),
     Route("/api/identify", identify, methods=["POST"]),
+    Route("/api/pdf", pdf_download),
     Route("/api/watches", watches_list_create, methods=["GET", "POST"]),
     Route("/api/watches/{watch_id}", watch_delete, methods=["DELETE"]),
     Route("/api/watches/{watch_id}/feed", watch_feed),

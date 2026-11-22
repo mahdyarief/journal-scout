@@ -8,6 +8,7 @@ import { GraphPage } from "./routes/graph";
 import { HistoryPage } from "./routes/history";
 import { LandscapePage } from "./routes/landscape";
 import { MetricsPage } from "./routes/metrics";
+import { PdfPage } from "./routes/pdf";
 import { SearchPage } from "./routes/search";
 import { DocsPage } from "./routes/docs";
 
@@ -62,6 +63,16 @@ const metricsRoute = createRoute({
   component: MetricsPage,
 });
 
+const pdfRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pdf",
+  // ?doi=... prefills the form so other pages can link straight here.
+  validateSearch: (search: Record<string, unknown>): { doi?: string } => ({
+    doi: typeof search.doi === "string" ? search.doi : undefined,
+  }),
+  component: PdfPage,
+});
+
 const historyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/history",
@@ -84,6 +95,7 @@ const routeTree = rootRoute.addChildren([
   searchRoute,
   graphRoute,
   metricsRoute,
+  pdfRoute,
   historyRoute,
   landscapeRoute,
   docsRoute,

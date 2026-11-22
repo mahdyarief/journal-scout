@@ -12,6 +12,7 @@ import {
   LandscapeIcon,
   MetricsIcon,
   PanelToggleIcon,
+  PdfIcon,
   SearchIcon,
   DocsIcon,
 } from "./icons";
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/landscape", label: "Landscape", Icon: LandscapeIcon },
   { to: "/graph", label: "Citation graph", Icon: GraphIcon },
   { to: "/metrics", label: "Metrics", Icon: MetricsIcon },
+  { to: "/pdf", label: "PDF download", Icon: PdfIcon },
   { to: "/history", label: "History", Icon: HistoryIcon },
   { to: "/docs", label: "Docs", Icon: DocsIcon },
 ] as const;

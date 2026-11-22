@@ -2,6 +2,7 @@ import {
   BarChart3,
   BookOpen,
   ChevronDown,
+  FileDown,
   History,
   Mountain,
   Network,
@@ -58,4 +59,8 @@ export function SlidersIcon({ className }: IconProps) {
 
 export function CloseIcon({ className }: IconProps) {
   return <X className={className} strokeWidth={1.6} aria-hidden="true" />;
+}
+
+export function PdfIcon({ className }: IconProps) {
+  return <FileDown className={className} strokeWidth={1.6} aria-hidden="true" />;
 }

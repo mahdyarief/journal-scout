@@ -8,7 +8,7 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
-from . import aggregator, config, consensus_key, prompts
+from . import aggregator, config, consensus_key, pdf_tool, prompts
 from .abstracts import enrich_abstracts, resolve_abstract
 from .cache import build_cache
 from .corpus import load_corpus
@@ -44,6 +44,7 @@ UNIFIED_TOOLS = [
     "get_paper_abstract",
     "get_abstracts",
     "get_fulltext",
+    "get_pdf",
     "batch_lookup",
     "topic_classify",
 ]
@@ -59,6 +60,10 @@ SCIVAL_TOOLS = [
 KEY_TOOLS = ["rotate_consensus_key"]
 SLR_TOOL_NAMES = [t.name for t in slr_tool_defs()]
 TOOL_NAMES = UNIFIED_TOOLS + PER_SOURCE_TOOLS + SCOPUS_DETAIL_TOOLS + SCIVAL_TOOLS + KEY_TOOLS + SLR_TOOL_NAMES
+
+# "stdio" when the server is a child process on the client's machine (it can
+# write files there), "http" when it serves remote clients. get_pdf depends on it.
+TRANSPORT = "stdio"
 
 # MCP hosts reject a single tool result past their token cap (the transcript
 # keeps ~100k chars before erroring). Search payloads embed full abstracts and
@@ -390,6 +395,11 @@ def _tool_list() -> List[types.Tool]:
                 },
                 "required": ["identifier"],
             },
+        ),
+        types.Tool(
+            name="get_pdf",
+            description=pdf_tool.DESCRIPTION,
+            inputSchema=pdf_tool.INPUT_SCHEMA,
         ),
         types.Tool(
             name="batch_lookup",
@@ -935,9 +945,43 @@ async def _build_server():
     async def _list_tools() -> List[types.Tool]:
         return _tool_list()
 
+    async def _client_roots() -> List[str]:
+        """The client's workspace folders, when it supports MCP roots."""
+        try:
+            session = server.request_context.session
+            params = session.client_params
+            if not (params and params.capabilities and params.capabilities.roots):
+                return []
+            listed = await asyncio.wait_for(session.list_roots(), timeout=5)
+            return [str(root.uri) for root in listed.roots]
+        except Exception:  # noqa: BLE001 - roots are a hint, never fatal
+            return []
+
+    def _request_headers() -> Dict[str, str]:
+        try:
+            request = server.request_context.request
+            return {k.lower(): v for k, v in request.headers.items()} if request else {}
+        except Exception:  # noqa: BLE001
+            return {}
+
     @server.call_tool()
     async def _call_tool(tool_name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
         args = arguments or {}
+        if tool_name == "get_pdf":
+            # Not cached: it writes a file (stdio) or arms a download link (http).
+            try:
+                payload = await pdf_tool.get_pdf(
+                    args,
+                    providers,
+                    TRANSPORT,
+                    root_uris=await _client_roots() if TRANSPORT == "stdio" else [],
+                    base_url=pdf_tool.public_base_url(_request_headers())
+                    if TRANSPORT != "stdio"
+                    else None,
+                )
+            except Exception as e:  # noqa: BLE001
+                payload = {"status": "error", "error": str(e)}
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         key = (tool_name, json.dumps(args, sort_keys=True, default=str))
         try:
             payload = await cached_call(
@@ -974,8 +1018,10 @@ async def _run_stdio() -> None:
 
 
 async def _run_http(host: str, port: int, token: Optional[str]) -> None:
+    global TRANSPORT
     from contextlib import AsyncExitStack
 
+    TRANSPORT = "http"
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
     import uvicorn
 

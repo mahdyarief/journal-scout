@@ -9,7 +9,7 @@ missing ``pypdf`` reports ``error``. The one non-OA route, Sci-Net, is opt-in
 
 import asyncio
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import curl_fetch, pdf_links
 from . import scinet as scinet_client
@@ -153,10 +153,10 @@ def _looks_like_pdf(data: bytes) -> bool:
     return isinstance(data, (bytes, bytearray)) and b"%PDF-" in bytes(data[:1024])
 
 
-async def _download_text(
+async def _download_pdf(
     fetcher: Any, url: str, headers: Optional[Dict[str, str]] = None
-) -> str:
-    """Download ``url`` and extract its text; raise ``ValueError`` on non-PDFs.
+) -> bytes:
+    """Download ``url`` with httpx; raise ``ValueError`` on non-PDF replies.
 
     Redirects are followed: PDF links routinely bounce through a CDN or an
     ``/pdf`` -> ``/pdf/<file>`` hop before the bytes arrive.
@@ -167,39 +167,37 @@ async def _download_text(
     data = await fetcher.get_bytes(url, **kwargs)
     if not _looks_like_pdf(data):
         raise ValueError(f"{url} did not return a PDF (landing page or bot challenge?)")
-    return extract_pdf_text_from_bytes(data)
+    return bytes(data)
 
 
-async def _curl_download_text(url: str, headers: Optional[Dict[str, str]]) -> str:
+async def _curl_download_pdf(url: str, headers: Optional[Dict[str, str]]) -> bytes:
     _final_url, data = await curl_fetch.curl_get(url, headers or PUBLISHER_HEADERS)
     if not _looks_like_pdf(data):
         raise ValueError(f"{url} did not return a PDF via curl (bot challenge?)")
-    return extract_pdf_text_from_bytes(data)
+    return data
 
 
 def _result(identifier: str, status: str, **fields: Any) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "identifier": identifier,
         "status": status,
-        "full_text": None,
         "pdf_url": None,
-        "truncated": False,
     }
     payload.update(fields)
     return payload
 
 
-async def fetch_fulltext(
+async def _fetch_document(
     providers: List[ProviderBase],
     identifier: str,
-    max_chars: int = DEFAULT_MAX_CHARS,
+    convert: Callable[[bytes], Any],
     scinet: Optional[bool] = None,
     curl: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Resolve ``identifier`` to a PDF and return its extracted text.
+    """Walk the PDF routes and return the first PDF ``convert`` accepts.
 
     Routes are tried in order, each only when every earlier one failed (HTTP
-    error, non-PDF reply, or nothing to try):
+    error, non-PDF reply, ``convert`` raising, or nothing to try):
 
     1. ``open_access`` / ``arxiv``: the record's own PDF link, then arXiv.
     2. ``crossref``: ``application/pdf`` links the publisher deposited.
@@ -211,11 +209,9 @@ async def fetch_fulltext(
     Each URL is downloaded with system ``curl`` first and retried with httpx
     if curl fails. ``curl`` (``None`` reads :func:`josc.config.get_curl_enabled`)
     turns the curl step off; it is skipped anyway when curl is not on PATH.
-    Some publisher front ends serve curl while challenging httpx. ``via`` in
-    the result names the client that produced the text.
 
-    ``pdf_source`` names the route that produced the text; ``attempts`` lists
-    the ones that failed before it.
+    On success the result carries ``value`` (what ``convert`` returned),
+    ``pdf_url``, ``pdf_source``, ``via`` and any failed ``attempts``.
     """
     use_scinet = get_scinet_enabled() if scinet is None else scinet
     use_curl = (get_curl_enabled() if curl is None else curl) and bool(
@@ -278,8 +274,9 @@ async def fetch_fulltext(
     attempts: List[Dict[str, str]] = []
     tried: set = set()
     via: Dict[str, Optional[str]] = {"value": None}
+    missing = object()
 
-    async def _try(source: str, url: str) -> Optional[str]:
+    async def _try(source: str, url: str) -> Any:
         # The record's own links keep the default client headers; publisher
         # pages get a browser-like UA, which their front ends expect.
         headers = None if source in ("open_access", "arxiv") else PUBLISHER_HEADERS
@@ -287,40 +284,40 @@ async def fetch_fulltext(
         # curl. httpx (cached, in-process) is the fallback, and the only
         # client when curl is disabled or missing.
         clients = [
-            ("curl", lambda: _curl_download_text(url, headers)),
-            ("httpx", lambda: _download_text(fetcher, url, headers)),
+            ("curl", lambda: _curl_download_pdf(url, headers)),
+            ("httpx", lambda: _download_pdf(fetcher, url, headers)),
         ]
         if not use_curl:
             clients = clients[1:]
         for client, download in clients:
             try:
-                text = await download()
+                value = convert(await download())
             except ProviderError as exc:
                 error = exc.message
             except Exception as exc:  # pypdf missing, malformed PDF, HTML page, ...
                 error = str(exc)
             else:
                 via["value"] = client
-                return text
+                return value
             attempts.append(
                 {"source": source, "pdf_url": url, "via": client, "error": error}
             )
-        return None
+        return missing
 
-    text: Optional[str] = None
+    value: Any = missing
     source = pdf_url = None
     for stage in (_own, _crossref, _landing, _publisher, _scinet):
         for source, pdf_url in await stage():
             if pdf_url in tried:
                 continue
             tried.add(pdf_url)
-            text = await _try(source, pdf_url)
-            if text is not None:
+            value = await _try(source, pdf_url)
+            if value is not missing:
                 break
-        if text is not None:
+        if value is not missing:
             break
 
-    if text is None:
+    if value is missing:
         extra: Dict[str, Any] = {"paper": paper.to_dict()}
         if not attempts:
             return _result(identifier, "no_oa" if resolved else "not_found", **extra)
@@ -331,15 +328,12 @@ async def fetch_fulltext(
             identifier, "error", pdf_url=last["pdf_url"], error=last["error"], **extra
         )
 
-    truncated = len(text) > max_chars
     payload = _result(
         identifier,
         "found",
-        full_text=text[:max_chars],
+        value=value,
         pdf_url=pdf_url,
         pdf_source=source,
-        truncated=truncated,
-        chars=min(len(text), max_chars),
         paper=paper.to_dict(),
     )
     if via["value"]:
@@ -347,3 +341,56 @@ async def fetch_fulltext(
     if attempts:
         payload["attempts"] = attempts
     return payload
+
+
+async def fetch_fulltext(
+    providers: List[ProviderBase],
+    identifier: str,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    scinet: Optional[bool] = None,
+    curl: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Resolve ``identifier`` to a PDF and return its extracted text.
+
+    See :func:`_fetch_document` for the route order. ``pdf_source`` names the
+    route that produced the text, ``via`` the client (``curl`` or ``httpx``),
+    and ``attempts`` the routes that failed before it.
+    """
+    result = await _fetch_document(
+        providers,
+        identifier,
+        # Looked up per call so tests can monkeypatch the extractor.
+        lambda data: extract_pdf_text_from_bytes(data),
+        scinet=scinet,
+        curl=curl,
+    )
+    text = result.pop("value", None)
+    result.setdefault("full_text", None)
+    result.setdefault("truncated", False)
+    if text is None:
+        return result
+    result["full_text"] = text[:max_chars]
+    result["truncated"] = len(text) > max_chars
+    result["chars"] = min(len(text), max_chars)
+    return result
+
+
+async def fetch_pdf(
+    providers: List[ProviderBase],
+    identifier: str,
+    scinet: Optional[bool] = None,
+    curl: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Resolve ``identifier`` to a PDF and return its raw bytes as ``pdf_bytes``.
+
+    Same routes as :func:`fetch_fulltext`; the bytes are checked to be a PDF
+    but not parsed, so ``pypdf`` is not needed.
+    """
+    result = await _fetch_document(
+        providers, identifier, lambda data: bytes(data), scinet=scinet, curl=curl
+    )
+    data = result.pop("value", None)
+    if data is not None:
+        result["pdf_bytes"] = data
+        result["size"] = len(data)
+    return result

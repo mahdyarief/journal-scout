@@ -66,9 +66,9 @@ Claude after changing `.mcp.json`.
 See [Remote MCP server](#remote-mcp-server) below: one Docker image serves
 `/mcp`, the `josc-web` UI, and the REST API.
 
-## Tools (43)
+## Tools (44)
 
-| Unified (11) | Papers & abstracts (5) | Per-source (8) |
+| Unified (11) | Papers & abstracts (6) | Per-source (8) |
 |---|---|---|
 | `search_all` | `get_paper` | `search_scopus` |
 | `search_author` | `get_paper_abstract` | `search_arxiv` |
@@ -76,7 +76,7 @@ See [Remote MCP server](#remote-mcp-server) below: one Docker image serves
 | `get_references` | `identify_paper` | `search_crossref` |
 | `get_related_works` | `get_fulltext` | `search_pubmed` |
 | `build_citation_network` | | `search_garuda` |
-| `compute_metrics` | | `search_consensus` |
+| `compute_metrics` | `get_pdf` | `search_consensus` |
 | `export_results` | | `search_exa` |
 | `build_research_landscape` | | |
 | `batch_lookup` | | |
@@ -159,6 +159,28 @@ Extraction needs `pypdf`, which ships in the `pdf` extra
 (`pip install "journal-scout[pdf]"`) and is installed in the Docker image. A
 server without it returns `status="error"` with an install hint rather than an
 empty string.
+
+### PDF file download
+
+`get_pdf` returns the PDF **file**, not its text. It walks the same routes as
+`get_fulltext` and checks the bytes are a PDF (no `pypdf` needed). Where the
+file lands depends on how the client reaches the server:
+
+| Server mode | `delivery` | What happens |
+|---|---|---|
+| Local stdio (install mode B) | `saved` | Written to `<folder>/source/pdf/<doi>.pdf`; `path` is returned |
+| Remote HTTP (modes A and C) | `download` | The server cannot write to your disk. It keeps the PDF for 15 minutes and returns `download_url`, `save_path` and a ready `command` (`mkdir -p ... && curl -fsSL -o ...`) that the client runs in its working folder |
+
+`<folder>` is `save_dir` when given (relative paths resolve against the working
+folder), else the client's first MCP root, i.e. the folder Claude is working
+in, else `JOSC_PDF_DIR` (used as is), else the server's working directory.
+`filename` overrides the default name (`10.1016/j.x.1` becomes
+`10.1016_j.x.1.pdf`); directory parts in it are dropped.
+
+The download link is `GET /api/pdf?identifier=<doi>&filename=<name>`. Called
+without a prior `get_pdf`, it resolves the PDF on demand, and `scinet` and
+`curl` query flags override the server settings. A paper with no PDF answers
+JSON with status 404 (`not_found`, `no_oa`) or 502 (`error`).
 
 ### Batch lookup
 
@@ -311,6 +333,8 @@ Environment variables:
 | `JOSC_PORT` | `8080` | HTTP listen port |
 | `JOSC_MCP_TOKEN` | unset | Optional bearer token; set it for public deployments |
 | `JOSC_WEB_DIST` | `/app/web/dist` in Docker | Built UI directory served at `/` |
+| `JOSC_PUBLIC_URL` | from request headers | Public base URL for `get_pdf` download links, e.g. `https://journal.example` |
+| `JOSC_PDF_DIR` | unset | stdio only: folder `get_pdf` saves to when the client exposes no MCP root |
 
 API keys and behaviour (each also has a `config.json` key for source checkouts):
 
@@ -365,9 +389,13 @@ For UI development, run `npm run dev` inside `web/` (Vite proxies `/api` to
 | `POST /api/merge` | Merge an external record list |
 | `GET /api/export/graphml?identifier=` | GraphML download |
 | `POST /api/export` | Bibliography export (JSON body: `papers`, `format`) |
+| `GET /api/pdf?identifier=&filename=` | Paper PDF as a file download (see [PDF file download](#pdf-file-download)) |
 
-The UI has four routes: `/` (search), `/graph`, `/metrics`, and `/history`
-(the recorded search list, with replay, split, duplicate, export, and import).
+The UI routes are `/` (search), `/landscape`, `/graph`, `/metrics`, `/pdf`,
+`/history` (the recorded search list, with replay, split, duplicate, export,
+and import), and `/docs`. `/pdf` takes one or more DOIs or arXiv ids, one per
+line, and downloads each PDF through `/api/pdf`, with a Sci-Net override and
+optional auto-save; `/pdf?doi=<doi>` prefills the form.
 
 ## Objectives
 
